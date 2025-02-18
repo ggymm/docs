@@ -6,11 +6,9 @@ tags: ["linux", "ubuntu", "swap"]
 categories: []
 ---
 
-
 ### 创建交换分区
 
 ```sh
-
 # 查看磁盘空间
 df -h
 

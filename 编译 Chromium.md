@@ -6,8 +6,8 @@ tags: ["chrome", "编译"]
 categories: []
 ---
 
-
 ### 参考文档
+
 [在Windows检查和构建文档](https://chromium.googlesource.com/chromium/src/+/main/docs/windows_build_instructions.md)
 
 ### 配置Git代理
@@ -54,6 +54,7 @@ categories: []
 ### 初始化depot_tools
 
 执行命令，安装更新python，cipd等工具
+
 ```bash
 gclient
 ```
@@ -61,12 +62,14 @@ gclient
 ### 下载代码
 
 设置代理
+
 ```bash
 set http_proxy=http://127.0.0.1:9910
 set https_proxy=http://127.0.0.1:9910
 ```
 
 创建目录并下载chromium代码
+
 ```bash
 mkdir chromium && cd chromium
 fetch --no-history chromium
@@ -79,11 +82,13 @@ fetch --no-history chromium
 下载代码之后会在chromium目录下创建src目录，进入到src目录执行下面操作
 
 生成编译配置
+
 ```bash
 gn gen out/Default
 ```
 
 编译代码
+
 ```bash
 autoninja -C out\Default chrome
 ```
