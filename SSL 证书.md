@@ -1,0 +1,202 @@
+---
+date: "2025-02-19"
+title: "签名与证书"
+summary: ""
+tags: ["openssl", "证书", "签名", "Java", "Android", "Nginx"]
+categories: []
+---
+
+### 创建证书
+
+1. 使用工具
+
+```bash
+# 命令详解
+keytool -genkey \
+        -alias keyname \ # 密钥条目别名（keyname 可自定义），后续通过别名引用此密钥
+        -keyalg RSA \ # 密钥算法为 RSA（支持算法如 RSA、DSA、EC）
+        -keysize 2048 \ # 密钥长度 2048 位
+        -validity 36500 \ # 证书有效期 36500 天
+        -keystore private.keystore \ # 密钥库文件名（默认类型为 JKS）
+        
+# 创建
+keytool -genkey -alias keyname -keyalg RSA -keysize 2048 -validity 36500 -keystore private.keystore 
+
+# 迁移（因为JKS证书过时了）
+keytool -importkeystore -srckeystore private.keystore -destkeystore private.keystore -deststoretype pkcs12
+```
+
+2. 使用代码（以Go为例）
+
+```go
+package main
+
+import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
+	"os"
+	"path/filepath"
+	"time"
+)
+
+type CreateReq struct {
+	Output string `json:"output"`
+
+	Country      string `json:"country"`
+	Organization string `json:"organization"`
+	CommonName   string `json:"common_name"`
+}
+
+func Create(req *CreateReq) string {
+	// 生成私钥
+	private, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return "error#" + err.Error()
+	}
+
+	// 生成序列号
+	sn, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return "error#" + err.Error()
+	}
+
+	// 创建模板
+	template := &x509.Certificate{
+		SerialNumber: sn, // 证书序列号
+		Subject: pkix.Name{
+			Country:      []string{req.Country},
+			Organization: []string{req.Organization},
+			CommonName:   req.CommonName,
+		},
+		NotBefore:             time.Now(),                                 // 证书有效期开始时间
+		NotAfter:              time.Now().Add(100 * 365 * 24 * time.Hour), // 证书有效期结束时间（100年）
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	// 自签名证书
+	certificate, err := x509.CreateCertificate(rand.Reader, template, template, &private.PublicKey, private)
+	if err != nil {
+		return "error#" + err.Error()
+	}
+
+	// 保存私钥
+	key, err := os.Create(filepath.Join(req.Output, "private.pem"))
+	if err != nil {
+		return "error#" + err.Error()
+	}
+	defer func() {
+		_ = key.Close()
+	}()
+	err = pem.Encode(key, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(private)})
+	if err != nil {
+		return "error#" + err.Error()
+	}
+
+	// 保存证书
+	cert, err := os.Create(filepath.Join(req.Output, "ca.pem"))
+	if err != nil {
+		return "error#" + err.Error()
+	}
+	defer func() {
+		_ = cert.Close()
+	}()
+	err = pem.Encode(cert, &pem.Block{Type: "CERTIFICATE", Bytes: certificate})
+	if err != nil {
+		return "error#" + err.Error()
+	}
+	return "success"
+}
+```
+
+### 证书格式
+
+| 证书格式 | 说明 | 应用场景 |
+| ---- | -- | ---- |
+| JKS | 单一文件，加密存储，Java 专有的证书格式 | 旧版本的 Java 应用（SpringBoot，Java8） |
+| PKCS12 | 单一文件，加密存储，跨平台，更通用，取代 JKS 格式 | 广泛用于应用签名（Android，Windows，MacOS等），Nginx，Tomcat |
+| PEM/CRT | 多文件（私钥，证书，信任链证书），Base64编码存储 | Nginx，Apache 等 Web 服务器配置 |
+
+### 证书格式转换
+
+#### JKS 转 PKCS12
+
+```bash
+keytool -mportkeystore \
+        -srckeystore private.keystore \ # 源密钥文件（JKS格式）
+        -destkeystore private.p12 \ # 生成的密钥文件（PKCS12格式）
+        -deststoretype pkcs12
+```
+
+#### PEM 转 PKCS12
+
+```bash
+openssl pkcs12 -export \
+               -out server.p12 \ # 生成文件 server.p12
+               -inkey private.key \ # 私钥文件路径
+               -in cert.crt \ # 证书文件路径
+               -certfile chain.crt \ 证书链文件路径
+               -name server # 证书别名
+```
+
+#### PKCS12 转 JKS
+
+```bash
+keytool -importkeystore \
+        -srckeystore server.p12 \ #源文件
+				-srcstoretype PKCS12 \ # 源文件格式
+        -destkeystore server.jks \ # 目标文件
+        -deststoretype JKS # 目标文件格式
+```
+
+### 常见问题
+
+#### 缺少中间证书
+
+在配置 Nginx 等 Web 服务器时，如果配置的证书文件缺少中间证书
+
+会导致 浏览器 无法校验完整的信任链，从而不信任该证书（认为证书不合法）
+
+此时需要将证书与中间 CA 证书拼接为完整的证书
+
+```bash
+cat server.crt intermediate.crt root.crt > fullchain.pem
+```
+
+#### 私钥与证书不匹配
+
+可以首先使用以下方式来验证私钥与证书是否匹配
+
+1. 对比公钥哈希值
+
+```bash
+# 验证私钥
+openssl pkey -pubout -in server.key | openssl md5
+
+# 验证证书
+openssl x509 -noout -pubkey -in server.crt | openssl md5
+```
+
+- 结果：输出一致即为匹配
+
+2. 对比 RSA 模数（针对 RSA 证书）
+
+```bash
+# 验证私钥
+openssl rsa -noout -modulus -in server.key | openssl md5
+
+# 验证证书
+openssl x509 -noout -modulus -in server.crt | openssl md5
+```
+
+- 结果：输出一致即为匹配
+
+如果输出结果不一致，则需要重新生成，或者重新申请证书
+
+
+
