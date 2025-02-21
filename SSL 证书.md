@@ -1,6 +1,6 @@
 ---
 date: "2025-02-19"
-title: "签名与证书"
+title: "SSL 证书"
 summary: ""
 tags: ["openssl", "证书", "签名", "Java", "Android", "Nginx"]
 categories: []
