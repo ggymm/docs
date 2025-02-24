@@ -8,7 +8,7 @@ categories: []
 
 ### 创建交换分区
 
-```sh
+```bash
 # 查看磁盘空间
 df -h
 

@@ -14,7 +14,7 @@ categories: []
 
 输入以下命令
 
-```sh
+```bash
 yum remove -y gnome-initial-setup
 
 init 3
