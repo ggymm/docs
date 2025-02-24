@@ -1,6 +1,6 @@
 ---
 date: "2025-02-12"
-title: "编译 Chromium"
+title: "编译打包 Chromium"
 summary: ""
 tags: ["chrome", "编译"]
 categories: []

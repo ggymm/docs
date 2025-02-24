@@ -1,6 +1,6 @@
 ---
 date: "2025-02-12"
-title: "跳过 centos 账户注册"
+title: "跳过 Centos 账户注册"
 summary: ""
 tags: ["linux", "centos"]
 categories: []
